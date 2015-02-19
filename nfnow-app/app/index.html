@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title></title>
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    {{BASE_TAG}}
+
+    <link rel="stylesheet" href="assets/vendor.css">
+    <link rel="stylesheet" href="assets/netflix-now.css">
+  </head>
+  <body>
+    <script>
+      window.NetflixNowENV = {{ENV}};
+      window.EmberENV = window.NetflixNowENV.EmberENV;
+    </script>
+    <script src="assets/vendor.js"></script>
+    <script src="assets/netflix-now.js"></script>
+    <script>
+      window.NetflixNow = require('netflix-now/app')['default'].create(NetflixNowENV.APP);
+    </script>
+  </body>
+</html>
