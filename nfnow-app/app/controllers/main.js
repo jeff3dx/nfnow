@@ -8,16 +8,20 @@ function secs(n) {
 }
 
 
+//var HOST = "http://localhost:2001/";
+var HOST = "";
+var EVENTS_URL = HOST + "api/events";
+var MOVIES_URL = HOST + "api/videos?mids=%@";
+
+
 export default Ember.Controller.extend({
 
   classNames: ['earth'],
-  server: 'http://localhost:8888',
 
-  sampleCount: 100,
-  zoom: 1000,
-  fade: 750,
-  plotSpeed: 150,
-  timerSpeed: 10000,
+  zoom: 1000,           // time for each sample to zoom in
+  fade: 750,            // time for each sample to fade out
+  plotSpeed: 75,        // ms between each new sample
+  timerSpeed: 5000,     // ms between each server call to get new data
 
   topTitleWidth: 300,
   topTitleHeight: 300,
@@ -30,6 +34,19 @@ export default Ember.Controller.extend({
   hoverTitle: '',
   hoverImageSrc: '',
   hoverStyle: '',
+
+  showBoxart: false,
+  showDots: true,
+  showTop10: false,
+
+
+  topTitlesStyle: function() {
+    if(this.get('showTop10')) {
+      return "display: block;";
+    } else {
+      return "display: none;";
+    }
+  }.property('showTop10'),
 
 
   sendServerRequest: function(query, fn) {
@@ -47,27 +64,23 @@ export default Ember.Controller.extend({
     });
   },
 
+  // prod
   requestEventData: function(fn) {
     var self = this;
-    self.sendServerRequest('http://localhost:8888?type=events', function(data) {
+    self.sendServerRequest(EVENTS_URL, function(data) {
       fn(data);
     });
   },
 
   requestMovieData: function(needed, fn) {
     var self = this;
-    var json;
-    var fixed1, fixed2;
-    var query = 'http://localhost:8888?type=movie&mids=%@'.fmt(needed);
+    var query = MOVIES_URL.fmt(needed);
 
     self.sendServerRequest(query, function(data) {
-      fixed1 = data.replace(/}{/g, '},{');
-      fixed2 = '{"data":[' + fixed1 + ']}';
-      json = JSON.parse(fixed2);
-      fn(json);
+      fn(data);
     });
-
   },
+
 
   onMouseEnter: function(d, i, d3event, el, self) {
     var x = d3event.pageX;
@@ -236,7 +249,7 @@ export default Ember.Controller.extend({
       .attr('x', function(d) { return xscale(d.rank); })
       .attr('y', function(d) { return height - yscale(d.count); })
       .attr('height', function(d) { return yscale(d.count); })
-      .style('opacity', 1);
+      .style('opacity', 0.7);
 
     // update existing art
     updateArt.transition().duration(speed)
@@ -278,6 +291,7 @@ export default Ember.Controller.extend({
       var allParsed = [];
       var parsed;
 
+
       for(var k=0; k<dataCount; k++) {
         parsed = JSON.parse(msg.data[k]);
         parsed.size = parsed.events.length;
@@ -312,13 +326,20 @@ export default Ember.Controller.extend({
 
       // get art
       self.requestMovieData(needed, function(artResp) {
-        artResp.data.forEach(function(d) {
-          if(d.artworks.length > 0) {
-            existingArt[d.id] = {
-              title: d.title,
-              artUrl: d.artworks[0].url
-            };
-          }
+
+        if(!Array.isArray(artResp)) {
+          artResp = [artResp];
+        }
+
+        artResp.forEach(function(elem) {
+          elem.data.forEach(function(d) {
+            if(d.artworks.length > 0) {
+              existingArt[d.id] = {
+                title: d.title,
+                artUrl: d.artworks[0].url
+              };
+            }
+          });
         });
 
         all.forEach(function(d, i) {
@@ -341,7 +362,15 @@ export default Ember.Controller.extend({
 
           (function plot(sample, i) {
             setTimeout(function() {
-              self.plotSample(sample);
+
+              if(self.get('showBoxart')) {
+                self.plotSample(sample);
+              }
+
+              if(self.get('showDots')) {
+                self.plotSampleAsDot(sample);
+              }
+
             }, i * self.get('plotSpeed'));
           })(sample, i);
 
@@ -392,6 +421,42 @@ export default Ember.Controller.extend({
   },
 
 
+  plotSampleAsDot: function(sample) {
+    var projection = this.get('projection');
+    var svg = this.get('svg');
+
+    var width = 20;
+    var height = 20;
+    var xy = projection([sample.lng, sample.lat]);
+
+    var image = svg.append('image')
+      .attr('x', xy[0])
+      .attr('y', xy[1])
+      .attr('width', 1)
+      .attr('height', 1)
+      .style('opacity', 1)
+      .attr('xlink:href', 'assets/images/yellowdot.png')
+      .attr('title', sample.title);
+
+    // fade in the image
+    image.transition().duration(500)
+      .attr('x', xy[0] - (width / 2))
+      .attr('y', xy[1] - (height /2))
+      .attr('width', width)
+      .attr('height', height)
+
+      // delay, then fade out
+      .transition()
+        .delay(1000)
+        .duration(5000)
+          .style('opacity', 0)
+
+            // this chains remove to happen after the fade above
+            .transition(1)
+            .remove();
+  },
+
+
   drawGlobe: function() {
     var width = 1400,
         height = 1300;
@@ -409,15 +474,6 @@ export default Ember.Controller.extend({
         .scale(scale)
         .translate([x, y])
         .precision(0.1);
-
-
-    // var projection = d3.geo.orthographic()
-    //     .scale(1000)
-    //     .translate([700, 1000])
-    //     .clipAngle(90)
-    //     .precision(0.1)
-    //     .rotate([120,0,0]);
-
 
     this.projection = projection;
 

@@ -1,7 +1,9 @@
+<img class="logo" src="assets/images/logo-reg2x.png"/>
+
 <div class="earth">
 </div>
 
-<div class="top-titles">
+<div class="top-titles" {{bind-attr style=topTitlesStyle}}>
   <svg></svg>
   <div class="trending">POPULAR NOW</div>
 </div>
@@ -14,3 +16,10 @@
     {{hoverTitle}}
   </div>
 </div>
+
+<div class="display-options">
+  <label>Box Art</label>{{input type="checkbox" name="boxart" checked=showBoxart}}
+  <label>Dots</label>{{input type="checkbox" name="dots" checked=showDots}}
+  <label>Top 10</label>{{input type="checkbox" name="top10" checked=showTop10}}
+</div>
+
