@@ -4,6 +4,11 @@ var http = require("http");
 var path = require("path");
 var fs =   require("fs");
 
+// polyfil exists
+if(!fs.exists) {
+  fs.exists = path.exists;
+}
+
 var port = process.argv[2] || 7001;
 
 var filename_useast1 = path.join(process.cwd(), "us-east-1.json");
