@@ -16,12 +16,20 @@ var MOVIES_URL = HOST + "api/videos?mids=%@";
 
 export default Ember.Controller.extend({
 
+  queryParams: ['lifeSpan', 'fetchSpeed'],
   classNames: ['earth'],
 
+  lifeSpan: 5000,      // dots hang around this many ms
   zoom: 1000,           // time for each sample to zoom in
   fade: 750,            // time for each sample to fade out
-  plotSpeed: 75,        // ms between each new sample
-  timerSpeed: 5000,     // ms between each server call to get new data
+  fetchSpeed: 5000,     // ms between each server call to get new data
+
+  plotSpeed: function() {
+    var factor = this.get('fetchSpeed') / 150;  // 50 samples X 3 regions + 30% overlap
+    factor = factor + (factor * 0.3);
+    return factor;
+  }.property('fetchSpeed'),
+
 
   topTitleWidth: 300,
   topTitleHeight: 300,
@@ -278,7 +286,7 @@ export default Ember.Controller.extend({
     self.getMoreSamples();
     self.timer = setInterval(function() {
       self.getMoreSamples();
-    }, this.timerSpeed);
+    }, this.get('fetchSpeed'));
   },
 
 
@@ -293,17 +301,20 @@ export default Ember.Controller.extend({
 
 
       for(var k=0; k<dataCount; k++) {
-        parsed = JSON.parse(msg.data[k]);
-        parsed.size = parsed.events.length;
-        allParsed.push(parsed);
+        if(msg.data[k] !== null) {
+          parsed = JSON.parse(msg.data[k]);
+          parsed.size = parsed.events.length;
+          allParsed.push(parsed);
+        }
       }
 
       //interleave data
       var all = [];
+      var parsedLen = allParsed.length;
       var max = d3.max(allParsed, function(d) { return d.size; });
 
       for(var i=0; i<max; i++) {
-        for(var j=0; j<dataCount; j++) {
+        for(var j=0; j<parsedLen; j++) {
           if(allParsed[j].size > i) {
             all.push(allParsed[j].events[i]);
           }
@@ -343,17 +354,21 @@ export default Ember.Controller.extend({
         });
 
         all.forEach(function(d, i) {
-          if(!existingArt[d.content['mid']]) {
-            return;
-          }
+          var artUrl, artTitle;
 
-          var art = existingArt[d.content['mid']];
+          if(!existingArt[d.content['mid']]) {
+            artUrl = null;
+            artTitle = null;
+          } else {
+            artUrl = existingArt[d.content['mid']].artUrl;
+            artTitle = existingArt[d.content['mid']].title;
+          }
 
           var sample = {
               mid: d.content['mid'],
               date: Date.now(),
-              title: art.title,
-              artUrl: art.artUrl,
+              title: artTitle,
+              artUrl: artUrl,
               lng: d.content["geo.longitude"],
               lat: d.content["geo.latitude"],
           };
@@ -393,6 +408,10 @@ export default Ember.Controller.extend({
   svg: null,
 
   plotSample: function(sample) {
+    if(sample.artUrl === null) {
+      return;
+    }
+
     var projection = this.get('projection');
     var svg = this.get('svg');
 
@@ -422,6 +441,7 @@ export default Ember.Controller.extend({
 
 
   plotSampleAsDot: function(sample) {
+    var self = this;
     var projection = this.get('projection');
     var svg = this.get('svg');
 
@@ -438,17 +458,15 @@ export default Ember.Controller.extend({
       .attr('xlink:href', 'assets/images/yellowdot.png')
       .attr('title', sample.title);
 
-    // fade in the image
-    image.transition().duration(500)
+    image.transition().duration(500)    // dot fades in
       .attr('x', xy[0] - (width / 2))
       .attr('y', xy[1] - (height /2))
       .attr('width', width)
       .attr('height', height)
 
-      // delay, then fade out
       .transition()
-        .delay(1000)
-        .duration(5000)
+        .delay(self.get('lifeSpan'))   // dot hangs around
+        .duration(5000) // dot fades out
           .style('opacity', 0)
 
             // this chains remove to happen after the fade above

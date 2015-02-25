@@ -12,8 +12,8 @@ if(!fs.exists) {
 var port = process.argv[2] || 7001;
 
 var filename_useast1 = path.join(process.cwd(), "us-east-1.json");
-var filename_uswest2 = path.join(process.cwd(), "us-west-1.json");
-var filename_euwest1 = path.join(process.cwd(), "eu-west-2.json");
+var filename_uswest2 = path.join(process.cwd(), "us-west-2.json");
+var filename_euwest1 = path.join(process.cwd(), "eu-west-1.json");
 var filename_artwork = path.join(process.cwd(), "artwork.json");
 
 var isRecordMode = function() {
@@ -100,14 +100,14 @@ function getHeaders() {
 function getHttp(url, type, fn, errFn) {
   var data = '';
 
-  console.log("Sending " + url);
+  console.log("Sending " + trunc(url));
   http.get(url, function(resp) {
     resp.on('data', function(chunk) {
       data += chunk;
     });
 
     resp.on('end', function() {
-      console.log(trunc(data));
+      //console.log(trunc(data));
 
       fn(data);
     });
@@ -167,6 +167,7 @@ var index_euwest1 = 0;
 
 function getNextRecordedData(url) {
   var data;
+  var result;
 
   if(url.indexOf("citools.us-east-1") !== NOTFOUND) {
     index_useast1 += 1;
@@ -174,12 +175,14 @@ function getNextRecordedData(url) {
       index_useast1 = 0;
     }
     data = play_useast1[index_useast1];
+
   } else if(url.indexOf("citools.us-west-2") !== NOTFOUND) {
     index_uswest2 += 1;
     if(index_uswest2 > play_uswest2.length) {
       index_uswest2 = 0;
     }
-    data = play_euwest1[index_euwest1];
+    data = play_uswest2[index_uswest2];
+
   } else if (url.indexOf("citools.eu-west-1") !== NOTFOUND) {
     index_euwest1 += 1;
     if(index_euwest1 > play_euwest1.length) {
@@ -188,7 +191,8 @@ function getNextRecordedData(url) {
     data = play_euwest1[index_euwest1];
   }
 
-  return JSON.stringify(data);
+  result = JSON.stringify(data);
+  return result;
 }
 
 function startFiles() {
@@ -209,6 +213,11 @@ function writeToFile(url, data) {
   if(!isRecordMode) {
     return;
   }
+
+  if(data.indexOf('"count":0,"events":[]') !== NOTFOUND) {
+    return;
+  }
+
   console.log("Writing to file");
 
   var datafile, prependComma;
@@ -253,9 +262,9 @@ function finalizeFiles() {
 
 
 
-var eastTmp = 'http://citools.us-east-1.prod.netflix.com/clientinfo/api/esi/logblobs?user=jbutsch%40netflix.com&logblobTypes=startplay&lastN=50&startSearchTimestampMsec={time}&isGeoMap=true';
-var westTmp = 'http://citools.us-west-2.prod.netflix.com/clientinfo/api/esi/logblobs?user=jbutsch%40netflix.com&logblobTypes=startplay&lastN=50&startSearchTimestampMsec={time}&isGeoMap=true';
-var euTmp = 'http://citools.eu-west-1.prod.netflix.com/clientinfo/api/esi/logblobs?user=jbutsch%40netflix.com&logblobTypes=startplay&lastN=50&startSearchTimestampMsec={time}&isGeoMap=true';
+var eastTmp = 'http://citools.us-east-1.prod.netflix.com/clientinfo/api/esi/logblobs?user=jbutsch%40netflix.com&logblobTypes=startplay&lastN=100&startSearchTimestampMsec={time}&isGeoMap=true';
+var westTmp = 'http://citools.us-west-2.prod.netflix.com/clientinfo/api/esi/logblobs?user=jbutsch%40netflix.com&logblobTypes=startplay&lastN=100&startSearchTimestampMsec={time}&isGeoMap=true';
+var euTmp = 'http://citools.eu-west-1.prod.netflix.com/clientinfo/api/esi/logblobs?user=jbutsch%40netflix.com&logblobTypes=startplay&lastN=100&startSearchTimestampMsec={time}&isGeoMap=true';
 var videoTmp = 'http://api-int-be-1283610733.us-east-1.elb.amazonaws.com:7001/jbutsch/getArtWork?videoIds={mids}&widths=200&types=sdp,personalize=true';
 
 
@@ -347,23 +356,24 @@ function eventsRequestHandler(resp) {
     var westSeq = getHttpRx(westQuery, 'events west');
     var euSeq = getHttpRx(euQuery, 'events eu');
 
-    Rx.Observable.merge(eastSeq, westSeq, euSeq).subscribe(
-    function(d) {
-      console.log("Rx on next");
-      finalData.data.push(d);
-    },
-    function(error) {
-      console.log(" Error:" + error);
-    },
-    function() {
-      console.log("Rx on complete");
+    //Rx.Observable.merge(eastSeq, westSeq, euSeq).subscribe(
+    Rx.Observable.concat(eastSeq, westSeq, euSeq).subscribe(
+      function(d) {
+        //console.log("Rx on next");
+        finalData.data.push(d);
+      },
+      function(error) {
+        console.log("Rx onError:" + error);
+      },
+      function() {
+        //console.log("Rx on complete");
 
-      var headers = getHeaders();
+        var headers = getHeaders();
 
-      resp.writeHead(200, headers);
-      resp.write(JSON.stringify(finalData), "utf8");
-      resp.end();
-    });
+        resp.writeHead(200, headers);
+        resp.write(JSON.stringify(finalData), "utf8");
+        resp.end();
+      });
 
   } catch (ex) {
     console.log("eventsRequestHandler exception: " + ex);
